@@ -19,7 +19,7 @@
   <div id="app"></div>
 
   <script>
-    const { createApp, reactive } = Vue
+    const { createApp, reactive, onMounted } = Vue
     const { createVuetify } = Vuetify
 
     // Initialize GunDB
@@ -68,7 +68,9 @@
         }
 
         // 在頁面加載時自動恢復登入狀態
-        restoreSession()
+        onMounted(() => {
+          restoreSession()
+        })
 
         const register = () => {
           user.create(state.username, state.password, ack => {
