@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GunDB Secure Notes with Recall</title>
+  <title>GunDB Secure Notes</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vuetify@3.7.6/dist/vuetify.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -22,7 +22,7 @@
     const { createApp, reactive, onMounted } = Vue
     const { createVuetify } = Vuetify
 
-    // Initialize GunDB and User
+    // Initialize GunDB
     const gun = Gun({
       peers: ['https://gun-manhattan.herokuapp.com/gun'], // Public relay peer
       localStorage: false // Disable LocalStorage
@@ -42,11 +42,20 @@
           showChangePassword: false, // Controls Change Password visibility
         })
 
+        const verifyAlias = () => {
+          user.get('alias').once(alias => {
+            if (!alias || typeof alias !== 'string') {
+              user.get('alias').put(state.username || 'Guest') // Ensure alias is valid
+            }
+          })
+        }
+
         const register = () => {
           user.create(state.username, state.password, ack => {
             if (ack.err) {
               state.message = `Error: ${ack.err}`
             } else {
+              user.get('alias').put(state.username) // Set alias
               state.message = 'Registration successful! Please log in.'
               state.page = 'login'
             }
@@ -58,9 +67,10 @@
             if (ack.err) {
               state.message = `Error: ${ack.err}`
             } else {
-              state.message = `Welcome, ${state.username}!`
+              verifyAlias() // Verify and sync alias
               state.page = 'notes'
               loadNote()
+              state.message = `Welcome, ${state.username}!`
             }
           })
         }
@@ -110,15 +120,25 @@
         }
 
         onMounted(() => {
-          // GunDB will automatically recall user session
           user.recall({ sessionStorage: true }, ack => {
             if (ack.err) {
               console.error('Session restore failed:', ack.err)
-            } else if (user.is) {
-              state.username = user.is.alias
-              state.page = 'notes'
-              loadNote()
-              state.message = `Welcome back, ${state.username}!`
+            } else if (user.is && user.is.alias) {
+              user.get('alias').once(alias => {
+                if (alias && typeof alias === 'string') {
+                  state.username = alias
+                  state.message = `Welcome back, ${state.username}!`
+                  state.page = 'notes'
+                  loadNote()
+                } else {
+                  console.warn('Alias invalid, resetting...')
+                  user.get('alias').put('Guest')
+                  state.username = 'Guest'
+                  state.message = 'Welcome back, Guest!'
+                  state.page = 'notes'
+                  loadNote()
+                }
+              })
             }
           })
         })
