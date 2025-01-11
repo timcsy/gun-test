@@ -39,7 +39,36 @@
           note: '',
           loggedInUser: null,
           message: '',
+          showChangePassword: false, // 控制 Change Password 顯示狀態
         })
+
+        // 保存加密的登入資訊到本地存儲
+        const saveSession = () => {
+          const session = user.is
+          if (session) {
+            localStorage.setItem('userSession', JSON.stringify(session))
+          }
+        }
+
+        // 恢復加密的登入資訊
+        const restoreSession = () => {
+          const savedSession = JSON.parse(localStorage.getItem('userSession'))
+          if (savedSession) {
+            user.auth(savedSession.alias, savedSession.pub, ack => {
+              if (ack.err) {
+                console.error('Session restore failed:', ack.err)
+              } else {
+                state.username = savedSession.alias
+                state.page = 'notes'
+                loadNote()
+                state.message = `Welcome back, ${state.username}!`
+              }
+            })
+          }
+        }
+
+        // 在頁面加載時自動恢復登入狀態
+        restoreSession()
 
         const register = () => {
           user.create(state.username, state.password, ack => {
@@ -57,6 +86,7 @@
             if (ack.err) {
               state.message = `Error: ${ack.err}`
             } else {
+              saveSession() // 登入成功後保存加密的 Session
               state.message = `Welcome, ${state.username}!`
               state.page = 'notes'
               loadNote()
@@ -75,6 +105,7 @@
                     state.message = `Error: ${ack.err}`
                   } else {
                     state.message = 'Password changed successfully!'
+                    state.showChangePassword = false // 隱藏修改密碼表單
                   }
                 })
               })
@@ -100,6 +131,7 @@
 
         const logout = () => {
           user.leave()
+          localStorage.removeItem('userSession') // 清除本地 Session
           state.page = 'login'
           state.username = ''
           state.password = ''
@@ -148,10 +180,17 @@
                 <v-btn color="primary" @click="saveNote">Save Note</v-btn>
                 <v-btn color="secondary" @click="logout">Logout</v-btn>
                 <v-divider></v-divider>
-                <h3>Change Password</h3>
-                <v-text-field label="Current Password" v-model="state.password" type="password"></v-text-field>
-                <v-text-field label="New Password" v-model="state.newPassword" type="password"></v-text-field>
-                <v-btn color="error" @click="changePassword">Change Password</v-btn>
+
+                <!-- Change Password Section -->
+                <v-btn color="error" @click="state.showChangePassword = !state.showChangePassword">
+                  Change Password
+                </v-btn>
+                <div v-if="state.showChangePassword">
+                  <h3>Change Password</h3>
+                  <v-text-field label="Current Password" v-model="state.password" type="password"></v-text-field>
+                  <v-text-field label="New Password" v-model="state.newPassword" type="password"></v-text-field>
+                  <v-btn color="error" @click="changePassword">Confirm Change</v-btn>
+                </div>
               </div>
             </v-container>
           </v-main>
