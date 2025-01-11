@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GUN + IndexedDB Note System</title>
+    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/lib/store.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gun/lib/rindexeddb.js"></script>
+</head>
+<body>
+    <h1>Note System with GUN and IndexedDB</h1>
+
+    <div>
+        <h2>Register</h2>
+        <input id="reg-username" placeholder="Username">
+        <input id="reg-password" type="password" placeholder="Password">
+        <button onclick="register()">Register</button>
+    </div>
+
+    <div>
+        <h2>Login</h2>
+        <input id="login-username" placeholder="Username">
+        <input id="login-password" type="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <div id="note-section" style="display:none;">
+        <h2>Welcome, <span id="user-name"></span></h2>
+        <textarea id="note-content" placeholder="Your notes here..."></textarea>
+        <button onclick="saveNote()">Save Note</button>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <script>
+        // 初始化 GUN 並啟用 IndexedDB 存儲
+        const gun = Gun({
+            peers: ['https://gun-manhattan.herokuapp.com/gun'], // 公共中繼節點
+            localStorage: false, // 禁用 LocalStorage，專用 IndexedDB
+            store: Gun.RindexedDB() // 使用 IndexedDB
+        });
+
+        const user = gun.user();
+
+        // 用戶註冊
+        function register() {
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+
+            user.create(username, password, ack => {
+                if (ack.err) {
+                    alert('Registration failed: ' + ack.err);
+                } else {
+                    alert('Registration successful!');
+                }
+            });
+        }
+
+        // 用戶登入
+        function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            user.auth(username, password, ack => {
+                if (ack.err) {
+                    alert('Login failed: ' + ack.err);
+                } else {
+                    document.getElementById('user-name').innerText = username;
+                    document.getElementById('note-section').style.display = 'block';
+                    loadNote();
+                }
+            });
+        }
+
+        // 加載筆記
+        function loadNote() {
+            user.get('note').on(data => {
+                if (data) {
+                    document.getElementById('note-content').value = data;
+                }
+            });
+        }
+
+        // 保存筆記
+        function saveNote() {
+            const content = document.getElementById('note-content').value;
+            user.get('note').put(content, ack => {
+                if (ack.err) {
+                    alert('Failed to save note: ' + ack.err);
+                } else {
+                    alert('Note saved successfully!');
+                }
+            });
+        }
+
+        // 登出
+        function logout() {
+            user.leave();
+            document.getElementById('note-section').style.display = 'none';
+            alert('Logged out!');
+        }
+    </script>
+</body>
+</html>
