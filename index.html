@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GunDB Notes</title>
+  <title>GunDB Secure Notes</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vuetify@3.7.6/dist/vuetify.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -42,21 +42,29 @@
           showChangePassword: false, // 控制 Change Password 顯示狀態
         })
 
+        // 設置會話過期時間
+        const sessionExpiry = 24 * 60 * 60 * 1000 // 24小時
+
         // 保存加密的登入資訊到本地存儲
         const saveSession = () => {
           const session = user.is
+          const expiryTime = Date.now() + sessionExpiry
           if (session) {
-            localStorage.setItem('userSession', JSON.stringify(session))
+            localStorage.setItem(
+              'userSession',
+              JSON.stringify({ ...session, expiry: expiryTime })
+            )
           }
         }
 
         // 恢復加密的登入資訊
         const restoreSession = () => {
           const savedSession = JSON.parse(localStorage.getItem('userSession'))
-          if (savedSession) {
+          if (savedSession && savedSession.expiry > Date.now()) {
             user.auth(savedSession.alias, savedSession.pub, ack => {
               if (ack.err) {
                 console.error('Session restore failed:', ack.err)
+                localStorage.removeItem('userSession') // 清除無效會話
               } else {
                 state.username = savedSession.alias
                 state.page = 'notes'
@@ -64,6 +72,8 @@
                 state.message = `Welcome back, ${state.username}!`
               }
             })
+          } else {
+            localStorage.removeItem('userSession') // 清除過期會話
           }
         }
 
