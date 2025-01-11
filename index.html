@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>GUN + IndexedDB Note System</title>
+    <title>GUN + IndexedDB Account System</title>
+    <!-- GUN Core Library -->
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    <!-- GUN Security Encryption Authorization (SEA) -->
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/lib/store.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/lib/rindexeddb.js"></script>
 </head>
 <body>
     <h1>Note System with GUN and IndexedDB</h1>
 
+    <!-- Registration Form -->
     <div>
         <h2>Register</h2>
         <input id="reg-username" placeholder="Username">
@@ -17,6 +18,7 @@
         <button onclick="register()">Register</button>
     </div>
 
+    <!-- Login Form -->
     <div>
         <h2>Login</h2>
         <input id="login-username" placeholder="Username">
@@ -24,6 +26,7 @@
         <button onclick="login()">Login</button>
     </div>
 
+    <!-- Note Section (Hidden by Default) -->
     <div id="note-section" style="display:none;">
         <h2>Welcome, <span id="user-name"></span></h2>
         <textarea id="note-content" placeholder="Your notes here..."></textarea>
@@ -32,16 +35,15 @@
     </div>
 
     <script>
-        // 初始化 GUN 並啟用 IndexedDB 存儲
+        // Initialize GUN with IndexedDB (default backend)
         const gun = Gun({
-            peers: ['https://gun-manhattan.herokuapp.com/gun'], // 公共中繼節點
-            localStorage: false, // 禁用 LocalStorage，專用 IndexedDB
-            store: Gun.RindexedDB() // 使用 IndexedDB
+            peers: ['https://gun-manhattan.herokuapp.com/gun'], // Public relay node
+            localStorage: false // Disable LocalStorage to prioritize IndexedDB
         });
 
-        const user = gun.user();
+        const user = gun.user(); // Initialize GUN user
 
-        // 用戶註冊
+        // User Registration
         function register() {
             const username = document.getElementById('reg-username').value;
             const password = document.getElementById('reg-password').value;
@@ -55,7 +57,7 @@
             });
         }
 
-        // 用戶登入
+        // User Login
         function login() {
             const username = document.getElementById('login-username').value;
             const password = document.getElementById('login-password').value;
@@ -71,7 +73,7 @@
             });
         }
 
-        // 加載筆記
+        // Load Note from GUN
         function loadNote() {
             user.get('note').on(data => {
                 if (data) {
@@ -80,7 +82,7 @@
             });
         }
 
-        // 保存筆記
+        // Save Note to GUN
         function saveNote() {
             const content = document.getElementById('note-content').value;
             user.get('note').put(content, ack => {
@@ -92,7 +94,7 @@
             });
         }
 
-        // 登出
+        // Logout
         function logout() {
             user.leave();
             document.getElementById('note-section').style.display = 'none';
