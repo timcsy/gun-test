@@ -1,109 +1,168 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>GUN + IndexedDB Account System</title>
-    <!-- GUN Core Library -->
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
-    <!-- GUN Security Encryption Authorization (SEA) -->
-    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/lib/radix.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/lib/radisk.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/lib/store.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/lib/rindexed.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GunDB Notes</title>
+  <script type="module" crossorigin src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.esm-browser.js"></script>
+  <script type="module" crossorigin src="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.esm.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vuetify@3/dist/vuetify.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.css">
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gun/lib/radix.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gun/lib/radisk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gun/lib/store.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gun/lib/rindexed.js"></script>
 </head>
 <body>
-    <h1>Note System with GUN and IndexedDB</h1>
+  <div id="app"></div>
 
-    <!-- Registration Form -->
-    <div>
-        <h2>Register</h2>
-        <input id="reg-username" placeholder="Username">
-        <input id="reg-password" type="password" placeholder="Password">
-        <button onclick="register()">Register</button>
-    </div>
+  <script>
+    const { createApp, reactive } = Vue
+    const { createVuetify } = Vuetify
 
-    <!-- Login Form -->
-    <div>
-        <h2>Login</h2>
-        <input id="login-username" placeholder="Username">
-        <input id="login-password" type="password" placeholder="Password">
-        <button onclick="login()">Login</button>
-    </div>
+    // Initialize GunDB
+    const gun = Gun({
+      peers: ['https://gun-manhattan.herokuapp.com/gun'],
+      store: Gun.Store({})
+    })
+    const user = gun.user()
 
-    <!-- Note Section (Hidden by Default) -->
-    <div id="note-section" style="display:none;">
-        <h2>Welcome, <span id="user-name"></span></h2>
-        <textarea id="note-content" placeholder="Your notes here..."></textarea>
-        <button onclick="saveNote()">Save Note</button>
-        <button onclick="logout()">Logout</button>
-    </div>
+    // Main App Component
+    const App = {
+      setup() {
+        const state = reactive({
+          page: 'login', // Current page: login, register, notes
+          username: '',
+          password: '',
+          newPassword: '',
+          note: '',
+          loggedInUser: null,
+          message: '',
+        })
 
-    <script>
-        // Initialize GUN with IndexedDB (default backend)
-        const gun = Gun({
-            peers: ['https://gun-manhattan.herokuapp.com/gun'], // Public relay node
-            localStorage: false // Disable LocalStorage to prioritize IndexedDB
-        });
-
-        const user = gun.user(); // Initialize GUN user
-
-        // User Registration
-        function register() {
-            const username = document.getElementById('reg-username').value;
-            const password = document.getElementById('reg-password').value;
-
-            user.create(username, password, ack => {
-                if (ack.err) {
-                    alert('Registration failed: ' + ack.err);
-                } else {
-                    alert('Registration successful!');
-                }
-            });
+        // Methods
+        const register = () => {
+          user.create(state.username, state.password, ack => {
+            if (ack.err) {
+              state.message = `Error: ${ack.err}`
+            } else {
+              state.message = 'Registration successful! Please login.'
+              state.page = 'login'
+            }
+          })
         }
 
-        // User Login
-        function login() {
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
-
-            user.auth(username, password, ack => {
-                if (ack.err) {
-                    alert('Login failed: ' + ack.err);
-                } else {
-                    document.getElementById('user-name').innerText = username;
-                    document.getElementById('note-section').style.display = 'block';
-                    loadNote();
-                }
-            });
+        const login = () => {
+          user.auth(state.username, state.password, ack => {
+            if (ack.err) {
+              state.message = `Error: ${ack.err}`
+            } else {
+              state.message = `Welcome, ${state.username}!`
+              state.page = 'notes'
+              loadNote()
+            }
+          })
         }
 
-        // Load Note from GUN
-        function loadNote() {
-            user.get('note').on(data => {
-                if (data) {
-                    document.getElementById('note-content').value = data;
-                }
-            });
+        const changePassword = () => {
+          user.auth(state.username, state.password, ack => {
+            if (ack.err) {
+              state.message = `Error: ${ack.err}`
+            } else {
+              user.get('alias').secret(state.newPassword, newSecret => {
+                user.get('pub').secret(newSecret, ack => {
+                  if (ack.err) {
+                    state.message = `Error: ${ack.err}`
+                  } else {
+                    state.message = 'Password changed successfully!'
+                  }
+                })
+              })
+            }
+          })
         }
 
-        // Save Note to GUN
-        function saveNote() {
-            const content = document.getElementById('note-content').value;
-            user.get('note').put(content, ack => {
-                if (ack.err) {
-                    alert('Failed to save note: ' + ack.err);
-                } else {
-                    alert('Note saved successfully!');
-                }
-            });
+        const saveNote = () => {
+          user.get('note').put(state.note, ack => {
+            if (ack.err) {
+              state.message = `Error: ${ack.err}`
+            } else {
+              state.message = 'Note saved!'
+            }
+          })
         }
 
-        // Logout
-        function logout() {
-            user.leave();
-            document.getElementById('note-section').style.display = 'none';
-            alert('Logged out!');
+        const loadNote = () => {
+          user.get('note').on(data => {
+            state.note = data || ''
+          })
         }
-    </script>
+
+        const logout = () => {
+          user.leave()
+          state.page = 'login'
+          state.username = ''
+          state.password = ''
+          state.note = ''
+          state.message = 'Logged out!'
+        }
+
+        return {
+          state,
+          register,
+          login,
+          changePassword,
+          saveNote,
+          loadNote,
+          logout,
+        }
+      },
+      template: `
+        <v-app>
+          <v-main>
+            <v-container>
+              <v-alert v-if="state.message" type="info" dismissible>{{ state.message }}</v-alert>
+
+              <!-- Login Page -->
+              <div v-if="state.page === 'login'">
+                <h2>Login</h2>
+                <v-text-field label="Username" v-model="state.username"></v-text-field>
+                <v-text-field label="Password" v-model="state.password" type="password"></v-text-field>
+                <v-btn color="primary" @click="login">Login</v-btn>
+                <v-btn @click="state.page = 'register'">Register</v-btn>
+              </div>
+
+              <!-- Register Page -->
+              <div v-if="state.page === 'register'">
+                <h2>Register</h2>
+                <v-text-field label="Username" v-model="state.username"></v-text-field>
+                <v-text-field label="Password" v-model="state.password" type="password"></v-text-field>
+                <v-btn color="primary" @click="register">Register</v-btn>
+                <v-btn @click="state.page = 'login'">Back to Login</v-btn>
+              </div>
+
+              <!-- Notes Page -->
+              <div v-if="state.page === 'notes'">
+                <h2>Welcome, {{ state.username }}</h2>
+                <v-textarea label="Your Note" v-model="state.note"></v-textarea>
+                <v-btn color="primary" @click="saveNote">Save Note</v-btn>
+                <v-btn color="secondary" @click="logout">Logout</v-btn>
+                <v-divider></v-divider>
+                <h3>Change Password</h3>
+                <v-text-field label="Current Password" v-model="state.password" type="password"></v-text-field>
+                <v-text-field label="New Password" v-model="state.newPassword" type="password"></v-text-field>
+                <v-btn color="error" @click="changePassword">Change Password</v-btn>
+              </div>
+            </v-container>
+          </v-main>
+        </v-app>
+      `
+    }
+
+    const vuetify = createVuetify()
+    createApp(App).use(vuetify).mount('#app')
+  </script>
 </body>
 </html>
