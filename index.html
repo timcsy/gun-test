@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GunDB Secure Notes</title>
+  <title>GunDB Secure Notes with Recall</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vuetify@3.7.6/dist/vuetify.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -22,12 +22,12 @@
     const { createApp, reactive, onMounted } = Vue
     const { createVuetify } = Vuetify
 
-    // Initialize GunDB
+    // Initialize GunDB and User
     const gun = Gun({
-      peers: ['https://gun-manhattan.herokuapp.com/gun'], // 公共中繼節點
-      localStorage: false // 禁用 LocalStorage，使用內部默認存儲（IndexedDB）
+      peers: ['https://gun-manhattan.herokuapp.com/gun'], // Public relay peer
+      localStorage: false // Disable LocalStorage
     })
-    const user = gun.user()
+    const user = gun.user().recall({ sessionStorage: true }) // Enable session persistence
 
     const App = {
       setup() {
@@ -39,47 +39,7 @@
           note: '',
           loggedInUser: null,
           message: '',
-          showChangePassword: false, // 控制 Change Password 顯示狀態
-        })
-
-        // 設置會話過期時間
-        const sessionExpiry = 24 * 60 * 60 * 1000 // 24小時
-
-        // 保存加密的登入資訊到本地存儲
-        const saveSession = () => {
-          const session = user.is
-          const expiryTime = Date.now() + sessionExpiry
-          if (session) {
-            localStorage.setItem(
-              'userSession',
-              JSON.stringify({ ...session, expiry: expiryTime })
-            )
-          }
-        }
-
-        // 恢復加密的登入資訊
-        const restoreSession = () => {
-          const savedSession = JSON.parse(localStorage.getItem('userSession'))
-          if (savedSession && savedSession.expiry > Date.now()) {
-            user.auth(savedSession.alias, savedSession.pub, ack => {
-              if (ack.err) {
-                console.error('Session restore failed:', ack.err)
-                localStorage.removeItem('userSession') // 清除無效會話
-              } else {
-                state.username = savedSession.alias
-                state.page = 'notes'
-                loadNote()
-                state.message = `Welcome back, ${state.username}!`
-              }
-            })
-          } else {
-            localStorage.removeItem('userSession') // 清除過期會話
-          }
-        }
-
-        // 在頁面加載時自動恢復登入狀態
-        onMounted(() => {
-          restoreSession()
+          showChangePassword: false, // Controls Change Password visibility
         })
 
         const register = () => {
@@ -87,7 +47,7 @@
             if (ack.err) {
               state.message = `Error: ${ack.err}`
             } else {
-              state.message = 'Registration successful! Please login.'
+              state.message = 'Registration successful! Please log in.'
               state.page = 'login'
             }
           })
@@ -98,7 +58,6 @@
             if (ack.err) {
               state.message = `Error: ${ack.err}`
             } else {
-              saveSession() // 登入成功後保存加密的 Session
               state.message = `Welcome, ${state.username}!`
               state.page = 'notes'
               loadNote()
@@ -117,7 +76,7 @@
                     state.message = `Error: ${ack.err}`
                   } else {
                     state.message = 'Password changed successfully!'
-                    state.showChangePassword = false // 隱藏修改密碼表單
+                    state.showChangePassword = false // Hide change password form
                   }
                 })
               })
@@ -143,13 +102,26 @@
 
         const logout = () => {
           user.leave()
-          localStorage.removeItem('userSession') // 清除本地 Session
           state.page = 'login'
           state.username = ''
           state.password = ''
           state.note = ''
           state.message = 'Logged out!'
         }
+
+        onMounted(() => {
+          // GunDB will automatically recall user session
+          user.recall({ sessionStorage: true }, ack => {
+            if (ack.err) {
+              console.error('Session restore failed:', ack.err)
+            } else if (user.is) {
+              state.username = user.is.alias
+              state.page = 'notes'
+              loadNote()
+              state.message = `Welcome back, ${state.username}!`
+            }
+          })
+        })
 
         return {
           state,
